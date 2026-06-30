@@ -1,0 +1,17 @@
+# R session artefacts
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj.user
+
+# rsconnect — contains account tokens, never commit
+rsconnect/
+
+# Quarto render output (generated files, not source)
+_site/
+dashboard_guide_files/
+dashboard_guide.html
+
+# OS
+.DS_Store
+Thumbs.db

@@ -176,6 +176,62 @@ EDDF · EDDM · EGKK · EGLL · EHAM · LEBL · LEMD · LFPG · LGAV · LPPT · 
 
 ---
 
+## Publishing the Dashboard Online
+
+The dashboard is designed to be published on **[shinyapps.io](https://www.shinyapps.io)**,
+RStudio's hosting platform for Shiny apps. A free account supports up to 5 apps
+and 25 active hours per month — sufficient for internal use and presentations.
+
+### One-time setup
+
+**1. Create a free account** at <https://www.shinyapps.io>
+
+**2. Install the deployment package** (if not already installed):
+
+```r
+install.packages("rsconnect")
+```
+
+**3. Get your credentials** — in the shinyapps.io dashboard go to:
+`Account → Tokens → Add Token → Show → Copy to Clipboard`
+
+**4. Fill in `deploy.R`** with your account name, token and secret:
+
+```r
+# deploy.R — edit these three lines
+rsconnect::setAccountInfo(
+  name   = "your-account-name",
+  token  = "your-token",
+  secret = "your-secret"
+)
+```
+
+### Deploy
+
+```r
+source("deploy.R")
+```
+
+The console will print the public URL and open the browser automatically:
+
+```
+https://your-account-name.shinyapps.io/Dashboard_BRA_EUR
+```
+
+### Notes
+
+- **`deploy.R` is safe to commit** — credentials are only stored locally by
+  `rsconnect` after `setAccountInfo()` is called. The `rsconnect/` folder
+  (which contains tokens) is listed in `.gitignore` and will never be pushed.
+- To **update** the live app after changing data or code, just run
+  `source("deploy.R")` again.
+- The total size of `data/` files is large (~800 MB). shinyapps.io accepts
+  up to 1 GB per app, but upload time will be a few minutes on the first
+  deploy. Future versions will pre-process data to `.rds` format to reduce
+  this significantly.
+
+---
+
 ## Updating the Data
 
 The files in `data/` were extracted from the joint DECEA–EUROCONTROL report

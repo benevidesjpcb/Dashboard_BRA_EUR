@@ -332,6 +332,69 @@ Negative values indicate early operations; positive values indicate late
 operations. The dashboard aggregates these 28 buckets into the five standard
 PBWG bands at load time.
 
+# Publishing the Dashboard Online
+
+The dashboard is designed to be published on
+**[shinyapps.io](https://www.shinyapps.io)**, RStudio's hosting platform
+for Shiny applications.
+
+## Platform
+
+| Feature | Free tier |
+|---------|-----------|
+| Number of apps | 5 |
+| Active hours/month | 25 h |
+| App URL | `https://<account>.shinyapps.io/<app-name>` |
+| R version support | Matches your local R version |
+
+The free tier is sufficient for internal use, stakeholder reviews, and
+bilateral presentations between DECEA and EUROCONTROL.
+
+## How to Deploy
+
+### Step 1 — Create an account
+
+Go to <https://www.shinyapps.io> and create a free account.
+
+### Step 2 — Get your credentials
+
+In the shinyapps.io dashboard:
+`Account → Tokens → Add Token → Show → Copy to Clipboard`
+
+### Step 3 — Fill in `deploy.R`
+
+Open `deploy.R` in RStudio and replace the placeholder values:
+
+```r
+rsconnect::setAccountInfo(
+  name   = "your-account-name",
+  token  = "your-token",
+  secret = "your-secret"
+)
+```
+
+### Step 4 — Run
+
+```r
+source("deploy.R")
+```
+
+The console prints the public URL and opens the browser automatically.
+
+## Security Note
+
+`deploy.R` is safe to commit to GitHub — credentials are stored locally by
+`rsconnect` after `setAccountInfo()` is called. The `rsconnect/` folder
+(which holds the actual token files) is listed in `.gitignore` and will
+never be pushed to the repository.
+
+## Re-deploying After Updates
+
+Every time data or code changes, re-running `source("deploy.R")` pushes
+the new version to the same URL. No manual steps required.
+
+---
+
 # Data Update Roadmap
 
 ## Overview
