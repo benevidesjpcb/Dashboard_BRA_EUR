@@ -1,0 +1,691 @@
+---
+title: "Brazil / Europe ANS Performance"
+subtitle: "DECEA · EUROCONTROL · PBWG · 2019–2025"
+format:
+  dashboard:
+    theme: cosmo
+    logo: ""
+    nav-buttons:
+      - icon: github
+        href: https://github.com/benevidesjpcb/Dashboard_BRA_EUR
+    scrolling: false
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(plotly)
+library(DT)
+library(crosstalk)
+library(zoo)
+
+# ── Colours ──────────────────────────────────────────────────────────────────
+COL_BRA <- "#009C3B"
+COL_EUR <- "#003399"
+PUNCT_COLS <- c(
+  "Early > 15 min" = "#2166ac",
+  "Early 5–15 min" = "#92c5de",
+  "Within ± 5 min" = "#4dac26",
+  "Late 5–15 min"  = "#f4a582",
+  "Late > 15 min"  = "#d6604d"
+)
+
+# ── Study airports ────────────────────────────────────────────────────────────
+airports <- tribble(
+  ~icao, ~name,                            ~city,            ~region,
+  "SBBR","Brasília Int'l",                 "Brasília",       "Brazil",
+  "SBCF","Confins",                        "Belo Horizonte", "Brazil",
+  "SBCT","Afonso Pena",                    "Curitiba",       "Brazil",
+  "SBEG","Eduardo Gomes",                  "Manaus",         "Brazil",
+  "SBGL","Galeão",                         "Rio de Janeiro", "Brazil",
+  "SBGR","Guarulhos",                      "São Paulo",      "Brazil",
+  "SBKP","Viracopos",                      "Campinas",       "Brazil",
+  "SBPA","Salgado Filho",                  "Porto Alegre",   "Brazil",
+  "SBRF","Guararapes",                     "Recife",         "Brazil",
+  "SBRJ","Santos Dumont",                  "Rio de Janeiro", "Brazil",
+  "SBSP","Congonhas",                      "São Paulo",      "Brazil",
+  "SBSV","Dep. L. E. Magalhães",           "Salvador",       "Brazil",
+  "EDDF","Frankfurt",                      "Frankfurt",      "Europe",
+  "EDDM","Munich",                         "Munich",         "Europe",
+  "EGKK","Gatwick",                        "London",         "Europe",
+  "EGLL","Heathrow",                       "London",         "Europe",
+  "EHAM","Schiphol",                       "Amsterdam",      "Europe",
+  "LEBL","El Prat",                        "Barcelona",      "Europe",
+  "LEMD","Barajas",                        "Madrid",         "Europe",
+  "LFPG","Charles de Gaulle",              "Paris",          "Europe",
+  "LGAV","Eleftherios Venizelos",          "Athens",         "Europe",
+  "LPPT","Humberto Delgado",               "Lisbon",         "Europe",
+  "LSZH","Kloten",                         "Zurich",         "Europe",
+  "LTFM","Istanbul Airport",               "Istanbul",       "Europe"
+)
+STUDY_BRA <- airports$icao[airports$region == "Brazil"]
+STUDY_EUR <- airports$icao[airports$region == "Europe"]
+
+# ── Punctuality helpers ───────────────────────────────────────────────────────
+EARLY_GT15 <- c("(-INF,-60]","(-60,-55]","(-55,-50]","(-50,-45]","(-45,-40]",
+                "(-40,-35]","(-35,-30]","(-30,-25]","(-25,-20]","(-20,-15]")
+EARLY_5_15 <- c("(-15,-10]","(-10,-5]")
+WITHIN5    <- c("(-5,0]","(0,5)")
+LATE_5_15  <- c("[5,10)","[10,15)")
+LATE_GT15  <- c("[15,20)","[20,25)","[25,30)","[30,35)","[35,40)",
+                "[40,45)","[45,50)","[50,55)","[55,60)","[60,INF)")
+
+agg_bands <- function(df) {
+  df |>
+    mutate(
+      early_gt15 = rowSums(across(all_of(EARLY_GT15)), na.rm = TRUE),
+      early_5_15 = rowSums(across(all_of(EARLY_5_15)), na.rm = TRUE),
+      within5    = rowSums(across(all_of(WITHIN5)),    na.rm = TRUE),
+      late_5_15  = rowSums(across(all_of(LATE_5_15)),  na.rm = TRUE),
+      late_gt15  = rowSums(across(all_of(LATE_GT15)),  na.rm = TRUE)
+    ) |>
+    select(ICAO, DATE, PHASE, N_VALID,
+           early_gt15, early_5_15, within5, late_5_15, late_gt15)
+}
+
+to_pct <- function(df) {
+  df |>
+    mutate(tot = early_gt15 + early_5_15 + within5 + late_5_15 + late_gt15) |>
+    mutate(across(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+                  ~ round(100 * .x / tot, 1))) |>
+    select(-tot)
+}
+
+read_punct <- function(path, region, yr = NA) {
+  d <- read.csv(path, check.names = FALSE) |>
+    agg_bands() |>
+    mutate(region = region, DATE = as.Date(DATE),
+           year   = if (is.na(yr)) year(DATE) else as.integer(yr))
+  d
+}
+
+punc_raw <- bind_rows(
+  read_punct("data/PBWG-BRA-punc-2025.csv",          "Brazil", 2025),
+  read_punct("data/PBWG-EUR-punc-2025.csv",           "Europe", 2025),
+  read_punct("data/PBWG-EUR-PUNC-2024.csv",           "Europe", 2024),
+  read_punct("data/PBWG-EUR-LGAV-punc-2024.csv",      "Europe", 2024),
+  read_punct("data/PBWG-EUR-PUNC-2023.csv",           "Europe", 2023),
+  read_punct("data/PBWG-EUR-PUNC-LPPT-2019-2024.csv", "Europe")
+) |>
+  filter(ICAO %in% c(STUDY_BRA, STUDY_EUR))
+
+punc_annual <- punc_raw |>
+  group_by(ICAO, region, year, PHASE) |>
+  summarise(across(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+                   sum, na.rm = TRUE), .groups = "drop") |>
+  to_pct() |>
+  mutate(within15 = early_5_15 + within5 + late_5_15) |>
+  left_join(airports[, c("icao","name","city")], by = c("ICAO" = "icao")) |>
+  mutate(label = paste0(ICAO, " – ", city))
+
+# ── Traffic ───────────────────────────────────────────────────────────────────
+traffic_daily <- bind_rows(
+  read.csv("data/PBWG-BRA-network-traffic-2023-2025.csv"),
+  read.csv("data/PBWG-EUR-network-traffic-2023-2025.csv")
+) |>
+  mutate(DATE = as.Date(DATE), year = year(DATE)) |>
+  arrange(REG, DATE) |>
+  group_by(REG) |>
+  mutate(roll7 = rollmean(FLTS, 7, fill = NA, align = "right")) |>
+  ungroup()
+
+traffic_annual <- traffic_daily |>
+  group_by(REG, year) |>
+  summarise(total = sum(FLTS, na.rm = TRUE), .groups = "drop") |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"),
+         total_M = round(total / 1e6, 2))
+
+# ── Capacity / BLI / PLI ─────────────────────────────────────────────────────
+bli_pli <- read.csv("data/PBWG-BRA-EUR-bli-pli-2019-2025.csv") |>
+  left_join(airports[, c("icao","name","city","region")],
+            by = c("ICAO" = "icao")) |>
+  mutate(label = paste0(ICAO, " – ", city))
+
+# ── Taxi ──────────────────────────────────────────────────────────────────────
+read_txxt <- function(path, region, yr) {
+  read.csv(path) |>
+    mutate(region = region, year = yr, DATE = as.Date(DATE))
+}
+
+txxt_annual <- bind_rows(
+  read_txxt("data/PBWG-BRA-txxt-analytic-2023-ref2024-icao_ganp_p20.csv","Brazil",2023),
+  read_txxt("data/PBWG-BRA-txxt-analytic-2024-ref2024-icao_ganp_p20.csv","Brazil",2024),
+  read_txxt("data/PBWG-BRA-txxt-analytic-2025-ref2024-icao_ganp_p20.csv","Brazil",2025),
+  read_txxt("data/PBWG-EUR-txxt-analytic-2023-ref2024-icao_ganp_p20.csv","Europe",2023),
+  read_txxt("data/PBWG-EUR-txxt-analytic-2024-ref2024-icao_ganp_p20.csv","Europe",2024),
+  read_txxt("data/PBWG-EUR-txxt-analytic-2025-ref2024-icao_ganp_p20.csv","Europe",2025)
+) |>
+  filter(ICAO %in% c(STUDY_BRA, STUDY_EUR)) |>
+  group_by(ICAO, region, year, PHASE) |>
+  summarise(avg_add = sum(TOT_ADD_TIME, na.rm = TRUE) /
+                      sum(MVTS_VALID,   na.rm = TRUE),
+            .groups = "drop") |>
+  left_join(airports[, c("icao","city")], by = c("ICAO" = "icao")) |>
+  mutate(label = paste0(ICAO, " – ", city))
+
+# ── Flows ─────────────────────────────────────────────────────────────────────
+flow_rank  <- read.csv("data/PBWG-BRA-EUR-study-flow-rank-2023-2025.csv")
+world_reg  <- read.csv("data/PBWG-BRA-EUR-world-region-departures-2025.csv") |>
+  filter(ADES_WORLD_REGION != "Unmapped") |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"),
+         pct    = round(SHARE * 100, 1))
+
+# ── Throughput ────────────────────────────────────────────────────────────────
+throughput <- read.csv("data/PBWG-BRA-EUR-ordered-throughput-LPPT-SBGR-2019-2025.csv")
+
+# ── DAIO ─────────────────────────────────────────────────────────────────────
+daio <- read.csv("data/PBWG-BRA-EUR-daio-share-2025.csv") |>
+  mutate(
+    region = recode(REG, BRA = "Brazil", EUR = "Europe"),
+    type   = recode(DAIO,
+      I = "Domestic/Regional", D = "Departures",
+      A = "Arrivals",          O = "Overflights"),
+    pct = round(SHARE * 100, 1)
+  )
+```
+
+# Overview
+
+## Row {height=18%}
+
+```{r kpi-bra}
+#| content: valuebox
+#| title: "Brazil 2025 – Controlled Flights"
+bra25 <- traffic_annual |> filter(REG == "BRA", year == 2025)
+list(
+  value = paste0(bra25$total_M, " M"),
+  icon  = "airplane",
+  color = "#009C3B"
+)
+```
+
+```{r kpi-eur}
+#| content: valuebox
+#| title: "Europe 2025 – Controlled Flights"
+eur25 <- traffic_annual |> filter(REG == "EUR", year == 2025)
+list(
+  value = paste0(eur25$total_M, " M"),
+  icon  = "globe",
+  color = "#003399"
+)
+```
+
+```{r kpi-ratio}
+#| content: valuebox
+#| title: "EUR / BRA Traffic Ratio 2025"
+ratio <- round(eur25$total_M / bra25$total_M, 1)
+list(
+  value = paste0(ratio, "×"),
+  icon  = "bar-chart",
+  color = "#6c757d"
+)
+```
+
+```{r kpi-apt}
+#| content: valuebox
+#| title: "Study Airports"
+list(value = "24", icon = "pin-map", color = "#495057")
+```
+
+## Row {height=82%}
+
+### Col {width=60%}
+
+```{r ov-traffic}
+#| title: "Daily Traffic – 7-day Rolling Average (2023–2025)"
+d <- traffic_daily |> filter(!is.na(roll7)) |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"))
+
+plot_ly(d, x = ~DATE, y = ~roll7, color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{x|%b %Y}<br>%{y:,.0f} flights<extra>%{fullData.name}</extra>") |>
+  layout(
+    xaxis  = list(title = ""),
+    yaxis  = list(title = "Flights / day (7-day avg)", tickformat = ","),
+    legend = list(orientation = "h", y = -0.15),
+    hovermode = "x unified"
+  )
+```
+
+### Col {width=40%}
+
+```{r ov-daio}
+#| title: "2025 Flight Distribution by Operation Type"
+plot_ly(daio, x = ~pct, y = ~region, color = ~type,
+        type = "bar", orientation = "h",
+        hovertemplate = "%{x}%<extra>%{fullData.name}</extra>") |>
+  layout(
+    barmode = "stack",
+    xaxis   = list(title = "Share (%)"),
+    yaxis   = list(title = ""),
+    legend  = list(orientation = "h", y = -0.2)
+  )
+```
+
+# Traffic
+
+## Row {height=65%}
+
+```{r tr-daily}
+#| title: "Daily Flights – Brazil vs Europe (2023–2025)"
+d <- traffic_daily |>
+  filter(!is.na(roll7)) |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"))
+
+plot_ly(d, x = ~DATE, y = ~roll7, color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type = "scatter", mode = "lines",
+        hovertemplate = "%{x|%d %b %Y}<br>%{y:,.0f} flights<extra>%{fullData.name}</extra>") |>
+  layout(
+    xaxis     = list(title = "", rangeslider = list(visible = TRUE)),
+    yaxis     = list(title = "Daily flights (7-day avg)", tickformat = ","),
+    legend    = list(orientation = "h", y = -0.2),
+    hovermode = "x unified"
+  )
+```
+
+## Row {height=35%}
+
+```{r tr-annual}
+#| title: "Annual Totals"
+traffic_annual |>
+  select(Region = region, Year = year, `Total Flights` = total, `Million` = total_M) |>
+  arrange(Region, Year) |>
+  datatable(options = list(pageLength = 8, dom = "tip"), rownames = FALSE) |>
+  formatCurrency("Total Flights", currency = "", digits = 0)
+```
+
+# Punctuality
+
+## Row
+
+### Col {.tabset}
+
+```{r pt-arr-2025}
+#| title: "Arrivals 2025"
+d <- punc_annual |> filter(PHASE == "ARR", year == 2025) |>
+  pivot_longer(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+               names_to = "band", values_to = "pct") |>
+  mutate(band = factor(band,
+    levels = c("early_gt15","early_5_15","within5","late_5_15","late_gt15"),
+    labels = names(PUNCT_COLS))) |>
+  mutate(label = paste0(ICAO, "\n", city))
+
+plot_ly(d, x = ~label, y = ~pct, color = ~band,
+        colors = PUNCT_COLS, type = "bar",
+        hovertemplate = "%{x}<br>%{y}%<extra>%{fullData.name}</extra>") |>
+  layout(
+    barmode  = "stack",
+    xaxis    = list(title = "", categoryorder = "array",
+                    categoryarray = d$label[order(d$region, d$ICAO)]),
+    yaxis    = list(title = "%"),
+    legend   = list(orientation = "h", y = -0.25),
+    shapes   = list(list(type = "line", x0 = 11.5, x1 = 11.5,
+                         y0 = 0, y1 = 100,
+                         line = list(color = "grey", dash = "dot")))
+  )
+```
+
+```{r pt-dep-2025}
+#| title: "Departures 2025"
+d <- punc_annual |> filter(PHASE == "DEP", year == 2025) |>
+  pivot_longer(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+               names_to = "band", values_to = "pct") |>
+  mutate(band = factor(band,
+    levels = c("early_gt15","early_5_15","within5","late_5_15","late_gt15"),
+    labels = names(PUNCT_COLS)))
+
+plot_ly(d, x = ~label, y = ~pct, color = ~band,
+        colors = PUNCT_COLS, type = "bar",
+        hovertemplate = "%{x}<br>%{y}%<extra>%{fullData.name}</extra>") |>
+  layout(
+    barmode = "stack",
+    xaxis   = list(title = "", categoryorder = "array",
+                   categoryarray = d$label[order(d$region, d$ICAO)]),
+    yaxis   = list(title = "%"),
+    legend  = list(orientation = "h", y = -0.25),
+    shapes  = list(list(type = "line", x0 = 11.5, x1 = 11.5,
+                        y0 = 0, y1 = 100,
+                        line = list(color = "grey", dash = "dot")))
+  )
+```
+
+```{r pt-arr-2024}
+#| title: "Arrivals 2024"
+d <- punc_annual |> filter(PHASE == "ARR", year == 2024) |>
+  pivot_longer(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+               names_to = "band", values_to = "pct") |>
+  mutate(band = factor(band,
+    levels = c("early_gt15","early_5_15","within5","late_5_15","late_gt15"),
+    labels = names(PUNCT_COLS)))
+
+plot_ly(d, x = ~label, y = ~pct, color = ~band,
+        colors = PUNCT_COLS, type = "bar",
+        hovertemplate = "%{x}<br>%{y}%<extra>%{fullData.name}</extra>") |>
+  layout(
+    barmode = "stack",
+    xaxis   = list(title = ""),
+    yaxis   = list(title = "%"),
+    legend  = list(orientation = "h", y = -0.25)
+  )
+```
+
+### Col {width=35%}
+
+```{r pt-within15}
+#| title: "% Within ±15 min (2025)"
+d <- punc_annual |>
+  filter(year == 2025) |>
+  select(ICAO, city, region, PHASE, within15) |>
+  pivot_wider(names_from = PHASE, values_from = within15) |>
+  rename(Arrivals = ARR, Departures = DEP) |>
+  arrange(region, desc(Arrivals))
+
+plot_ly(d, type = "scatter", mode = "markers",
+        x = ~Arrivals, y = ~Departures,
+        color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        text  = ~paste0(ICAO, " (", city, ")"),
+        hovertemplate = "<b>%{text}</b><br>ARR: %{x}%<br>DEP: %{y}%<extra></extra>",
+        marker = list(size = 10)) |>
+  layout(
+    xaxis = list(title = "Arrivals within ±15 min (%)"),
+    yaxis = list(title = "Departures within ±15 min (%)"),
+    legend = list(orientation = "h", y = -0.2)
+  )
+```
+
+# Capacity
+
+## Row
+
+### Col {width=55%}
+
+```{r cap-max}
+#| title: "Declared Peak Capacity 2025 (flights/hour)"
+d <- bli_pli |> filter(YEAR == max(YEAR)) |>
+  arrange(MAX_CAP)
+
+plot_ly(d, x = ~MAX_CAP, y = ~reorder(label, MAX_CAP),
+        color = ~REG, colors = c(BRA = COL_BRA, EUR = COL_EUR),
+        type = "bar", orientation = "h",
+        hovertemplate = "<b>%{y}</b><br>%{x} flights/h<extra></extra>") |>
+  layout(
+    xaxis  = list(title = "Flights / hour"),
+    yaxis  = list(title = ""),
+    legend = list(orientation = "h", y = -0.1),
+    margin = list(l = 160)
+  )
+```
+
+### Col {width=45%}
+
+```{r cap-bli}
+#| title: "Busy-Level Index (BLI) – 2019–2025"
+d <- bli_pli |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"))
+
+plot_ly(d, x = ~YEAR, y = ~BLI, color = ~region,
+        colors  = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type    = "scatter", mode = "lines+markers",
+        text    = ~label,
+        hovertemplate = "<b>%{text}</b><br>%{x}: BLI = %{y:.3f}<extra></extra>",
+        line    = list(width = 1), marker = list(size = 4),
+        opacity = 0.7) |>
+  layout(
+    xaxis  = list(title = "", dtick = 1),
+    yaxis  = list(title = "BLI (share of hours > 20% cap)"),
+    legend = list(orientation = "h", y = -0.15)
+  )
+```
+
+## Row
+
+```{r cap-pli}
+#| title: "Peak-Level Index (PLI) – 2019–2025"
+d <- bli_pli |>
+  mutate(region = recode(REG, BRA = "Brazil", EUR = "Europe"))
+
+plot_ly(d, x = ~YEAR, y = ~PLI, color = ~region,
+        colors  = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type    = "scatter", mode = "lines+markers",
+        text    = ~label,
+        hovertemplate = "<b>%{text}</b><br>%{x}: PLI = %{y:.4f}<extra></extra>",
+        line    = list(width = 1), marker = list(size = 4),
+        opacity = 0.7) |>
+  layout(
+    xaxis  = list(title = "", dtick = 1),
+    yaxis  = list(title = "PLI (share of hours > 80% cap)"),
+    legend = list(orientation = "h", y = -0.15)
+  )
+```
+
+# Taxi & ASMA
+
+## Row {height=60%}
+
+### Col {.tabset}
+
+```{r tx-out}
+#| title: "Taxi-Out (DEP)"
+d <- txxt_annual |> filter(PHASE == "DEP")
+
+plot_ly(d, x = ~year, y = ~avg_add, color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type = "scatter", mode = "lines+markers",
+        text = ~label,
+        hovertemplate = "<b>%{text}</b><br>%{x}: %{y:.2f} min<extra></extra>",
+        line   = list(width = 1.5),
+        marker = list(size = 6)) |>
+  layout(
+    xaxis  = list(title = "", dtick = 1),
+    yaxis  = list(title = "Avg additional taxi-out (min)"),
+    legend = list(orientation = "h", y = -0.15)
+  )
+```
+
+```{r tx-in}
+#| title: "Taxi-In (ARR)"
+d <- txxt_annual |> filter(PHASE == "ARR")
+
+plot_ly(d, x = ~year, y = ~avg_add, color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type = "scatter", mode = "lines+markers",
+        text = ~label,
+        hovertemplate = "<b>%{text}</b><br>%{x}: %{y:.2f} min<extra></extra>",
+        line   = list(width = 1.5),
+        marker = list(size = 6)) |>
+  layout(
+    xaxis  = list(title = "", dtick = 1),
+    yaxis  = list(title = "Avg additional taxi-in (min)"),
+    legend = list(orientation = "h", y = -0.15)
+  )
+```
+
+## Row {height=40%}
+
+```{r tx-table}
+#| title: "Additional Taxi Times – Summary Table"
+txxt_annual |>
+  select(Airport = label, Region = region, Year = year,
+         Phase = PHASE, `Avg add. time (min)` = avg_add) |>
+  mutate(`Avg add. time (min)` = round(`Avg add. time (min)`, 2)) |>
+  arrange(Region, Airport, Phase, Year) |>
+  datatable(filter = "top",
+            options = list(pageLength = 8, dom = "tip"),
+            rownames = FALSE)
+```
+
+# BRA–EUR Flows
+
+## Row
+
+### Col {width=50%}
+
+```{r fl-rank}
+#| title: "Study Route Pair Rank Evolution (2023–2025)"
+d <- flow_rank |>
+  filter(PAIR_CLASS == "Study-Study") |>
+  mutate(PAIR = factor(PAIR))
+
+plot_ly(d, x = ~factor(YEAR), y = ~RANK, color = ~PAIR,
+        type = "scatter", mode = "lines+markers",
+        hovertemplate = "<b>%{fullData.name}</b><br>Year %{x} → Rank %{y}<extra></extra>",
+        marker = list(size = 8)) |>
+  layout(
+    yaxis  = list(title = "Rank (1 = busiest)", autorange = "reversed"),
+    xaxis  = list(title = ""),
+    legend = list(orientation = "h", y = -0.2)
+  )
+```
+
+### Col {width=50%}
+
+```{r fl-world}
+#| title: "International Departures by World Region 2025"
+plot_ly(world_reg,
+        x = ~pct, y = ~reorder(ADES_WORLD_REGION, pct),
+        color = ~region,
+        colors = c(Brazil = COL_BRA, Europe = COL_EUR),
+        type = "bar", orientation = "h",
+        hovertemplate = "%{y}<br>%{x}%<extra>%{fullData.name}</extra>") |>
+  layout(
+    barmode = "group",
+    xaxis   = list(title = "Share of external departures (%)"),
+    yaxis   = list(title = ""),
+    legend  = list(orientation = "h", y = -0.15)
+  )
+```
+
+# Airport Comparison
+
+## Row {height=55%}
+
+### Col {width=50%}
+
+```{r cmp-sbgr}
+#| title: "SBGR – Guarulhos (São Paulo) · Arrival Punctuality"
+d <- punc_annual |>
+  filter(ICAO == "SBGR", PHASE == "ARR") |>
+  pivot_longer(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+               names_to = "band", values_to = "pct") |>
+  mutate(band = factor(band,
+    levels = c("early_gt15","early_5_15","within5","late_5_15","late_gt15"),
+    labels = names(PUNCT_COLS)))
+
+plot_ly(d, x = ~factor(year), y = ~pct, color = ~band,
+        colors = PUNCT_COLS, type = "bar",
+        hovertemplate = "%{x}<br>%{y}%<extra>%{fullData.name}</extra>") |>
+  layout(barmode = "stack",
+         xaxis = list(title = "Year"), yaxis = list(title = "%"),
+         legend = list(orientation = "h", y = -0.2))
+```
+
+### Col {width=50%}
+
+```{r cmp-lppt}
+#| title: "LPPT – Humberto Delgado (Lisbon) · Arrival Punctuality"
+d <- punc_annual |>
+  filter(ICAO == "LPPT", PHASE == "ARR") |>
+  pivot_longer(c(early_gt15, early_5_15, within5, late_5_15, late_gt15),
+               names_to = "band", values_to = "pct") |>
+  mutate(band = factor(band,
+    levels = c("early_gt15","early_5_15","within5","late_5_15","late_gt15"),
+    labels = names(PUNCT_COLS)))
+
+plot_ly(d, x = ~factor(year), y = ~pct, color = ~band,
+        colors = PUNCT_COLS, type = "bar",
+        hovertemplate = "%{x}<br>%{y}%<extra>%{fullData.name}</extra>") |>
+  layout(barmode = "stack",
+         xaxis = list(title = "Year"), yaxis = list(title = "%"),
+         legend = list(orientation = "h", y = -0.2))
+```
+
+## Row {height=45%}
+
+```{r cmp-thru}
+#| title: "Ordered Arrival Throughput – SBGR vs LPPT (2019–2025)"
+d <- throughput |>
+  mutate(airport = paste0(ICAO, ifelse(REG == "BRA",
+    " – Guarulhos (BRA)", " – Lisbon (EUR)")))
+
+plot_ly(d, x = ~RANK, y = ~TOT_THRU,
+        color  = ~airport,
+        colors = c("SBGR – Guarulhos (BRA)" = COL_BRA,
+                   "LPPT – Lisbon (EUR)"    = COL_EUR),
+        linetype = ~factor(YEAR),
+        type = "scatter", mode = "lines",
+        hovertemplate = "Rank %{x}<br>%{y} flights/h<extra>%{fullData.name}</extra>",
+        line = list(width = 1.2), opacity = 0.8) |>
+  layout(
+    xaxis  = list(title = "Rank (busiest hours first)"),
+    yaxis  = list(title = "Total throughput (flights/h)"),
+    legend = list(orientation = "h", y = -0.2)
+  )
+```
+
+# Data
+
+## Row {.tabset}
+
+```{r dt-punc}
+#| title: "Punctuality (annual)"
+punc_annual |>
+  select(ICAO, Airport = name, City = city, Region = region,
+         Year = year, Phase = PHASE,
+         `Early >15` = early_gt15, `Early 5–15` = early_5_15,
+         `Within ±5` = within5, `Late 5–15` = late_5_15,
+         `Late >15` = late_gt15, `Within ±15 (%)` = within15) |>
+  datatable(filter = "top",
+            options = list(pageLength = 12, scrollX = TRUE),
+            rownames = FALSE)
+```
+
+```{r dt-traffic}
+#| title: "Traffic (daily)"
+traffic_daily |>
+  select(Region = REG, Date = DATE, Year = year,
+         Total = FLTS, Roll7d = roll7) |>
+  mutate(Roll7d = round(Roll7d, 0)) |>
+  datatable(filter = "top",
+            options = list(pageLength = 12, scrollX = TRUE),
+            rownames = FALSE)
+```
+
+```{r dt-capacity}
+#| title: "Capacity / BLI / PLI"
+bli_pli |>
+  select(ICAO, Airport = name, City = city, Region = region,
+         Year = YEAR, `Max Cap` = MAX_CAP, BLI, PLI) |>
+  datatable(filter = "top",
+            options = list(pageLength = 12, scrollX = TRUE),
+            rownames = FALSE) |>
+  formatRound(c("BLI","PLI"), digits = 4)
+```
+
+```{r dt-taxi}
+#| title: "Taxi & ASMA"
+txxt_annual |>
+  select(ICAO, Airport = label, Region = region, Year = year,
+         Phase = PHASE, `Avg add. (min)` = avg_add) |>
+  mutate(`Avg add. (min)` = round(`Avg add. (min)`, 2)) |>
+  datatable(filter = "top",
+            options = list(pageLength = 12, scrollX = TRUE),
+            rownames = FALSE)
+```
+
+```{r dt-flows}
+#| title: "BRA–EUR Route Pairs"
+flow_rank |>
+  datatable(filter = "top",
+            options = list(pageLength = 12, scrollX = TRUE),
+            rownames = FALSE)
+```
