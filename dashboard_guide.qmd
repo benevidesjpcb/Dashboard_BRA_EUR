@@ -1,14 +1,13 @@
 ---
 title: "Brazil / Europe ANS Performance Dashboard"
-subtitle: "Guia de Funcionamento e Roadmap de Dados"
+subtitle: "User Guide and Data Roadmap"
 author: "DECEA / EUROCONTROL PBWG"
 date: today
-lang: pt
 format:
   html:
     toc: true
     toc-depth: 3
-    toc-title: "Sumário"
+    toc-title: "Contents"
     number-sections: true
     theme: cosmo
     code-fold: true
@@ -27,411 +26,409 @@ library(knitr)
 library(kableExtra)
 ```
 
-# Introdução
+# Introduction
 
-Este documento descreve o **Brazil / Europe ANS Performance Dashboard**, uma
-aplicação interativa desenvolvida em R Shiny para comparação de desempenho
-operacional de Navegação Aérea entre Brasil (DECEA) e Europa (EUROCONTROL).
+This document describes the **Brazil / Europe ANS Performance Dashboard**, an
+interactive R Shiny application for comparing Air Navigation System (ANS)
+operational performance between Brazil (DECEA) and Europe (EUROCONTROL).
 
-O dashboard é baseado no relatório conjunto
+The dashboard is based on the joint report
 *"Comparison of Operational Air Navigation System Performance: Brazil / Europe,
-2019–2025"*, produzido pelo **Performance Benchmarking Working Group (PBWG)**,
-e tem como objetivo principal apoiar o processo de **aquisição e acompanhamento
-de dados** entre as duas regiões, tornando os indicadores do relatório
-acessíveis de forma interativa e atualizada.
+2019–2025"*, produced by the **Performance Benchmarking Working Group (PBWG)**,
+and is designed to support the **data acquisition and monitoring process**
+between the two regions by making the report's indicators accessible in an
+interactive and updatable format.
 
-## Contexto
+## Background
 
-Em 2025, o Brasil processou aproximadamente **2,1 milhões de voos controlados**,
-representando cerca de 19% do tráfego europeu no mesmo período. A diferença de
-escala — com a Europa operando com uma densidade de tráfego cerca de quatro vezes
-maior — é uma das principais características estruturais que explicam as
-variações de desempenho documentadas ao longo do relatório.
+In 2025, Brazil handled approximately **2.1 million controlled flights**,
+representing around 19% of European traffic over the same period. The scale
+difference — with Europe operating at a traffic density roughly four times
+higher than Brazil — is one of the key structural characteristics explaining
+the performance variations documented throughout the report.
 
-O dashboard permite visualizar essas diferenças de forma dinâmica, comparar
-aeroportos de estudo individualmente, e acompanhar a evolução temporal de cada
-indicador.
+The dashboard allows users to visualise these differences dynamically, compare
+individual study airports, and track the evolution of each indicator over time.
 
-# Como Executar o Dashboard
+# Running the Dashboard
 
-## Pré-requisitos
+## Prerequisites
 
-- **R** versão ≥ 4.1
-- **RStudio** (recomendado) ou qualquer terminal R
+- **R** version ≥ 4.1
+- **RStudio** (recommended) or any R terminal
 
-## Instalação
+## Installation
 
 ```r
-# Execute uma única vez para instalar os pacotes necessários
+# Run once to install all required packages
 source("setup.R")
 ```
 
-Os pacotes instalados são:
+The packages installed are:
 
-| Pacote | Função no dashboard |
-|--------|-------------------|
-| `shiny` | Framework da aplicação web |
-| `bslib` | Tema e layout moderno (Bootstrap 5) |
-| `dplyr` / `tidyr` | Manipulação e transformação de dados |
-| `ggplot2` | Geração de todos os gráficos |
-| `lubridate` | Parsing de datas |
-| `scales` | Formatação de eixos |
-| `DT` | Tabelas interativas |
-| `zoo` | Média móvel para séries temporais |
+| Package | Role in the dashboard |
+|---------|-----------------------|
+| `shiny` | Web application framework |
+| `bslib` | Modern theme and layout (Bootstrap 5) |
+| `dplyr` / `tidyr` | Data manipulation and reshaping |
+| `ggplot2` | All charts and plots |
+| `lubridate` | Date parsing |
+| `scales` | Axis formatting |
+| `DT` | Interactive data tables |
+| `zoo` | Rolling averages for time series |
 
-## Iniciar o Dashboard
+## Launching the Dashboard
 
 ```r
 shiny::runApp()
 ```
 
-O dashboard abre automaticamente no navegador padrão.
+The dashboard opens automatically in the default browser.
 
-# Estrutura do Dashboard
+# Dashboard Structure
 
-O dashboard é organizado em **8 abas**, cada uma focada em uma área de desempenho.
+The dashboard is organised into **8 tabs**, each focused on a specific
+performance area.
 
 ## Overview {#sec-overview}
 
-**Objetivo:** visão executiva com os principais números e tendência geral de tráfego.
+**Purpose:** executive summary with the main figures and general traffic trend.
 
-Contém:
+Contents:
 
-- **KPI cards** — total de voos controlados em 2025 no Brasil e na Europa,
-  número de aeroportos de estudo
-- **Gráfico de tráfego diário** — média móvel de 7 dias do número de voos
-  por dia para ambas as regiões (2023–2025)
-- **Distribuição DAIO** — participação percentual de cada tipo de operação
-  (Doméstico/Regional, Partidas, Chegadas, Sobrevoos) em 2025
+- **KPI cards** — total controlled flights in 2025 for Brazil and Europe,
+  number of study airports
+- **Daily traffic chart** — 7-day rolling average of daily flights for both
+  regions (2023–2025)
+- **DAIO distribution** — percentage share of each operation type
+  (Domestic/Regional, Departures, Arrivals, Overflights) in 2025
 
 ## Traffic {#sec-traffic}
 
-**Objetivo:** análise do volume de tráfego com granularidade diária e segmentação
-por tipo de operação.
+**Purpose:** analysis of traffic volume with daily granularity and segmentation
+by operation type.
 
-Filtros disponíveis:
+Available filters:
 
-- Região (BRA, EUR ou ambas)
-- Segmento de voo (Total, Doméstico/Regional, Partidas, Chegadas, Sobrevoos)
+- Region (BRA, EUR, or both)
+- Flight segment (Total, Domestic/Regional, Departures, Arrivals, Overflights)
 
-Contém:
+Contents:
 
-- Gráfico de série temporal diária com média móvel 7 dias
-- Tabela de totais anuais por região
+- Daily time-series chart with 7-day rolling average
+- Annual totals table by region
 
 ## Punctuality {#sec-punctuality}
 
-**Objetivo:** análise da pontualidade de chegadas e partidas nos 24 aeroportos
-de estudo, desagregada em cinco bandas temporais.
+**Purpose:** analysis of arrival and departure punctuality at the 24 study
+airports, broken down into five time bands.
 
-As **cinco bandas de pontualidade** seguem a definição do relatório PBWG:
+The **five punctuality bands** follow the PBWG report definition:
 
-| Banda | Definição |
-|-------|-----------|
-| Early > 15 min | Chegou/partiu mais de 15 min antes do horário |
-| Early 5–15 min | Chegou/partiu entre 5 e 15 min antes |
-| Within ± 5 min | Dentro da janela de pontualidade (on-time) |
-| Late 5–15 min | Chegou/partiu entre 5 e 15 min atrasado |
-| Late > 15 min | Chegou/partiu mais de 15 min atrasado |
+| Band | Definition |
+|------|------------|
+| Early > 15 min | Arrived/departed more than 15 min ahead of schedule |
+| Early 5–15 min | Arrived/departed 5 to 15 min ahead of schedule |
+| Within ± 5 min | Within the on-time window |
+| Late 5–15 min | Arrived/departed 5 to 15 min behind schedule |
+| Late > 15 min | Arrived/departed more than 15 min behind schedule |
 
-Filtros disponíveis:
+Available filters:
 
-- Fase (Chegada / Partida)
-- Ano
-- Região (Brasil, Europa ou ambas)
+- Phase (Arrival / Departure)
+- Year
+- Region (Brazil, Europe, or both)
 
-Contém:
+Contents:
 
-- Gráfico de barras empilhadas com distribuição percentual por aeroporto
-- Gráficos de % dentro da janela ±15 min separados por região
+- Stacked bar chart with percentage distribution per airport
+- % within ±15 min bar charts, one panel per region
 
-> **Destaque do relatório:** em 2025, a pontualidade de partidas no Brasil
-> atingiu 81% dos voos dentro da janela de ±15 min, contra 66% na Europa.
-> Por outro lado, os aeroportos brasileiros apresentam alta proporção de
-> chegadas "significativamente antecipadas" (29%), sugerindo uso de buffers
-> conservadores nos horários programados.
+> **Report highlight:** in 2025, departure punctuality in Brazil reached 81%
+> of flights within the ±15 min window, compared with 66% in Europe.
+> Brazilian airports also show a high share of "significantly early" arrivals
+> (29%), suggesting conservative schedule buffering by operators.
 
 ## Capacity {#sec-capacity}
 
-**Objetivo:** análise da capacidade declarada e dos índices de utilização dos
-aeroportos de estudo no período 2019–2025.
+**Purpose:** analysis of declared capacity and utilisation indices for the
+study airports over 2019–2025.
 
-Os indicadores apresentados são:
+Indicators shown:
 
-| Indicador | Definição |
-|-----------|-----------|
-| `MAX_CAP` | Capacidade de pico declarada (movimentos/hora) |
-| `BLI` | *Busy-Level Index* — proporção de horas com demanda > 20% da capacidade |
-| `PLI` | *Peak-Level Index* — proporção de horas com demanda > 80% da capacidade |
+| Indicator | Definition |
+|-----------|------------|
+| `MAX_CAP` | Declared peak capacity (movements/hour) |
+| `BLI` | *Busy-Level Index* — share of hours with demand > 20% of capacity |
+| `PLI` | *Peak-Level Index* — share of hours with demand > 80% of capacity |
 
-Filtros disponíveis:
+Available filters:
 
-- Região
-- Intervalo de anos
+- Region
+- Year range
 
-Contém:
+Contents:
 
-- Ranking de capacidade declarada por aeroporto
-- Evolução do BLI e PLI ao longo do tempo
+- Capacity ranking by airport (latest year)
+- BLI and PLI evolution over time
 
 ## Taxi & ASMA {#sec-taxi}
 
-**Objetivo:** monitoramento dos tempos adicionais de superfície, indicadores-chave
-de eficiência tática nas operações de solo e sequenciamento de chegadas.
+**Purpose:** monitoring of additional surface times — key tactical efficiency
+indicators for ground operations and arrival sequencing.
 
-Os indicadores são calculados como o **desvio em relação ao tempo de referência
-não impedido** (tempo que o voo levaria sem nenhuma restrição):
+Indicators are calculated as the **deviation from the unimpeded reference time**
+(the time a flight would take with no restrictions):
 
-| Indicador | Fase | Definição |
-|-----------|------|-----------|
-| Taxi-Out adicional | Partida (DEP) | Tempo extra entre saída do gate e decolagem |
-| Taxi-In adicional | Chegada (ARR) | Tempo extra entre pouso e chegada ao gate |
-| ASMA adicional | Chegada | Tempo extra na área de sequenciamento (40 NM do aeroporto) |
+| Indicator | Phase | Definition |
+|-----------|-------|------------|
+| Additional Taxi-Out | Departure (DEP) | Extra time from gate pushback to take-off |
+| Additional Taxi-In | Arrival (ARR) | Extra time from landing to gate arrival |
+| Additional ASMA | Arrival | Extra time in the sequencing area (40 NM from airport) |
 
-> **Nota:** o ASMA está disponível apenas para aeroportos europeus nesta versão
-> do dashboard.
+> **Note:** ASMA data is currently available for European airports only.
 
-Filtros disponíveis:
+Available filters:
 
-- Fase (Taxi-Out / Taxi-In)
-- Região
+- Phase (Taxi-Out / Taxi-In)
+- Region
 
 ## BRA-EUR Flows {#sec-flows}
 
-**Objetivo:** análise das conexões inter-regionais entre Brasil e Europa.
+**Purpose:** analysis of inter-regional connections between Brazil and Europe.
 
-Contém:
+Contents:
 
-- **Ranking de pares de rotas** — evolução de rank dos pares entre aeroportos
-  de estudo das duas regiões (2023–2025), identificando quais rotas ganharam
-  ou perderam importância
-- **Distribuição por região do mundo** — participação de cada região do mundo
-  no tráfego internacional de partidas do Brasil e da Europa em 2025
+- **Route pair ranking** — rank evolution of study airport pairs between
+  the two regions (2023–2025), identifying which routes gained or lost
+  importance
+- **World region distribution** — share of each world region in the
+  international departure traffic of Brazil and Europe in 2025
 
-> **Destaque:** em 2025, Madrid–Guarulhos (LEMD–SBGR) tornou-se o par de
-> rota mais movimentado entre as duas regiões, ultrapassando Lisboa–Guarulhos
-> (LPPT–SBGR) que liderava em 2024.
+> **Report highlight:** in 2025, Madrid–Guarulhos (LEMD–SBGR) became the
+> busiest route pair between the two regions, overtaking Lisbon–Guarulhos
+> (LPPT–SBGR), which had led in 2024.
 
 ## Airport Comparison {#sec-comparison}
 
-**Objetivo:** comparação direta e personalizada entre um aeroporto brasileiro
-e um europeu, selecionados pelo usuário.
+**Purpose:** direct, user-selected comparison between one Brazilian airport
+and one European airport.
 
-Contém:
+Contents:
 
-- Distribuição de pontualidade (chegada ou partida) para cada aeroporto
-  selecionado no ano escolhido
-- **Curva de throughput ordenado** — número de chegadas por hora classificado
-  do maior para o menor, mostrando a distribuição da pressão operacional ao
-  longo dos anos (disponível para SBGR e LPPT, 2019–2025)
+- Punctuality distribution (arrival or departure) for each selected airport
+  in the chosen year
+- **Ordered throughput curve** — hourly arrival counts ranked from highest
+  to lowest, showing the distribution of operational pressure across years
+  (available for SBGR and LPPT, 2019–2025)
 
 ## Data {#sec-data}
 
-**Objetivo:** acesso direto às tabelas de dados carregadas, para inspeção,
-filtragem e exportação.
+**Purpose:** direct access to all loaded data tables for inspection, filtering,
+and export.
 
-Tabelas disponíveis: Airports, Traffic daily, Punctuality, BLI/PLI,
+Available tables: Airports, Traffic daily, Punctuality, BLI/PLI,
 Taxi/ASMA, Flow pairs.
 
-# Aeroportos de Estudo
+# Study Airports
 
 ```{r airports-table}
 airports <- tribble(
-  ~ICAO, ~Nome, ~Cidade, ~Região,
-  "SBBR","Brasília Int'l","Brasília","Brasil",
-  "SBCF","Confins","Belo Horizonte","Brasil",
-  "SBCT","Afonso Pena","Curitiba","Brasil",
-  "SBEG","Eduardo Gomes","Manaus","Brasil",
-  "SBGL","Galeão","Rio de Janeiro","Brasil",
-  "SBGR","Guarulhos","São Paulo","Brasil",
-  "SBKP","Viracopos","Campinas","Brasil",
-  "SBPA","Salgado Filho","Porto Alegre","Brasil",
-  "SBRF","Guararapes","Recife","Brasil",
-  "SBRJ","Santos Dumont","Rio de Janeiro","Brasil",
-  "SBSP","Congonhas","São Paulo","Brasil",
-  "SBSV","Dep. Luís Eduardo Magalhães","Salvador","Brasil",
-  "EDDF","Frankfurt","Frankfurt","Europa",
-  "EDDM","Munich","Munique","Europa",
-  "EGKK","Gatwick","Londres","Europa",
-  "EGLL","Heathrow","Londres","Europa",
-  "EHAM","Schiphol","Amsterdã","Europa",
-  "LEBL","El Prat","Barcelona","Europa",
-  "LEMD","Barajas","Madri","Europa",
-  "LFPG","Charles de Gaulle","Paris","Europa",
-  "LGAV","Eleftherios Venizelos","Atenas","Europa",
-  "LPPT","Humberto Delgado","Lisboa","Europa",
-  "LSZH","Kloten","Zurique","Europa",
-  "LTFM","Istanbul Airport","Istambul","Europa"
+  ~ICAO, ~Name, ~City, ~Region,
+  "SBBR","Brasília International","Brasília","Brazil",
+  "SBCF","Confins","Belo Horizonte","Brazil",
+  "SBCT","Afonso Pena","Curitiba","Brazil",
+  "SBEG","Eduardo Gomes","Manaus","Brazil",
+  "SBGL","Galeão","Rio de Janeiro","Brazil",
+  "SBGR","Guarulhos","São Paulo","Brazil",
+  "SBKP","Viracopos","Campinas","Brazil",
+  "SBPA","Salgado Filho","Porto Alegre","Brazil",
+  "SBRF","Guararapes","Recife","Brazil",
+  "SBRJ","Santos Dumont","Rio de Janeiro","Brazil",
+  "SBSP","Congonhas","São Paulo","Brazil",
+  "SBSV","Dep. Luís Eduardo Magalhães","Salvador","Brazil",
+  "EDDF","Frankfurt Airport","Frankfurt","Europe",
+  "EDDM","Munich Airport","Munich","Europe",
+  "EGKK","Gatwick Airport","London","Europe",
+  "EGLL","Heathrow Airport","London","Europe",
+  "EHAM","Amsterdam Schiphol","Amsterdam","Europe",
+  "LEBL","El Prat","Barcelona","Europe",
+  "LEMD","Barajas","Madrid","Europe",
+  "LFPG","Charles de Gaulle","Paris","Europe",
+  "LGAV","Eleftherios Venizelos","Athens","Europe",
+  "LPPT","Humberto Delgado","Lisbon","Europe",
+  "LSZH","Kloten","Zurich","Europe",
+  "LTFM","Istanbul Airport","Istanbul","Europe"
 )
 
 airports |>
-  kbl(caption = "24 aeroportos de estudo do relatório PBWG") |>
+  kbl(caption = "24 study airports from the PBWG joint report") |>
   kable_styling(bootstrap_options = c("striped","hover","condensed"),
                 full_width = FALSE) |>
-  pack_rows("Brasil", 1, 12) |>
-  pack_rows("Europa", 13, 24)
+  pack_rows("Brazil", 1, 12) |>
+  pack_rows("Europe", 13, 24)
 ```
 
-# Fontes de Dados
+# Data Sources
 
-Todos os arquivos em `data/` foram produzidos pelo **PBWG
-(Performance Benchmarking Working Group)** a partir das bases de dados oficiais
-de DECEA e EUROCONTROL/PRU, e utilizados no relatório de edição 2019–2025.
+All files in `data/` were produced by the **PBWG (Performance Benchmarking
+Working Group)** from official DECEA and EUROCONTROL/PRU databases, and used
+in the 2019–2025 edition of the joint report.
 
 ```{r data-sources-table}
 tibble::tribble(
-  ~Arquivo, ~Conteúdo, ~Período, ~Aba,
+  ~File, ~Content, ~Period, ~Tab,
   "PBWG-BRA-network-traffic-2023-2025.csv",
-    "Volume diário de voos BRA por segmento", "2023–2025", "Overview / Traffic",
+    "Daily flight volume BRA by segment", "2023–2025", "Overview / Traffic",
   "PBWG-EUR-network-traffic-2023-2025.csv",
-    "Volume diário de voos EUR por segmento", "2023–2025", "Overview / Traffic",
+    "Daily flight volume EUR by segment", "2023–2025", "Overview / Traffic",
   "PBWG-BRA-EUR-daio-share-2025.csv",
-    "Distribuição DAIO por região 2025", "2025", "Overview",
+    "DAIO distribution by region 2025", "2025", "Overview",
   "PBWG-BRA-punc-2025.csv",
-    "Pontualidade diária BRA por aeroporto e fase", "2025", "Punctuality",
+    "Daily BRA punctuality by airport and phase", "2025", "Punctuality",
   "PBWG-EUR-punc-2025.csv",
-    "Pontualidade diária EUR por aeroporto e fase", "2025", "Punctuality",
+    "Daily EUR punctuality by airport and phase", "2025", "Punctuality",
   "PBWG-EUR-PUNC-2024.csv",
-    "Pontualidade EUR 2024", "2024", "Punctuality",
+    "EUR punctuality 2024", "2024", "Punctuality",
   "PBWG-EUR-PUNC-2023.csv",
-    "Pontualidade EUR 2023", "2023", "Punctuality",
+    "EUR punctuality 2023", "2023", "Punctuality",
   "PBWG-EUR-LGAV-punc-2024.csv",
-    "Pontualidade LGAV (Atenas) 2024 — complementar", "2024", "Punctuality",
+    "LGAV (Athens) punctuality 2024 — supplementary", "2024", "Punctuality",
   "PBWG-EUR-PUNC-LPPT-2019-2024.csv",
-    "Histórico pontualidade LPPT (Lisboa) 2019–2024", "2019–2024", "Punctuality / Comparison",
+    "Historical LPPT (Lisbon) punctuality 2019–2024", "2019–2024", "Punctuality / Comparison",
   "PBWG-BRA-EUR-bli-pli-2019-2025.csv",
-    "Capacidade declarada, BLI e PLI por aeroporto", "2019–2025", "Capacity",
-  "PBWG-BRA-txxt-analytic-[ano]-ref2024-icao_ganp_p20.csv",
-    "Tempos adicionais de taxi BRA (3 arquivos: 2023, 2024, 2025)", "2023–2025", "Taxi & ASMA",
-  "PBWG-EUR-txxt-analytic-[ano]-ref2024-icao_ganp_p20.csv",
-    "Tempos adicionais de taxi EUR (3 arquivos: 2023, 2024, 2025)", "2023–2025", "Taxi & ASMA",
+    "Declared capacity, BLI and PLI per airport", "2019–2025", "Capacity",
+  "PBWG-BRA-txxt-analytic-[year]-ref2024-icao_ganp_p20.csv",
+    "Additional taxi times BRA (3 files: 2023, 2024, 2025)", "2023–2025", "Taxi & ASMA",
+  "PBWG-EUR-txxt-analytic-[year]-ref2024-icao_ganp_p20.csv",
+    "Additional taxi times EUR (3 files: 2023, 2024, 2025)", "2023–2025", "Taxi & ASMA",
   "PBWG-EUR-asma40-monthly-2023-2025-public.csv",
-    "Tempo adicional ASMA mensal EUR (raio 40 NM)", "2023–2025", "Taxi & ASMA",
+    "Monthly additional ASMA time EUR (40 NM radius)", "2023–2025", "Taxi & ASMA",
   "PBWG-BRA-EUR-study-flow-rank-2023-2025.csv",
-    "Ranking de pares de rotas entre aeroportos de estudo", "2023–2025", "BRA-EUR Flows",
+    "Route pair rankings between study airports", "2023–2025", "BRA-EUR Flows",
   "PBWG-BRA-EUR-world-region-departures-2025.csv",
-    "Distribuição de partidas internacionais por região do mundo", "2025", "BRA-EUR Flows",
+    "International departure distribution by world region", "2025", "BRA-EUR Flows",
   "PBWG-BRA-EUR-ordered-throughput-LPPT-SBGR-2019-2025.csv",
-    "Curva de throughput ordenado por hora (SBGR e LPPT)", "2019–2025", "Airport Comparison"
+    "Ordered hourly throughput curve (SBGR and LPPT)", "2019–2025", "Airport Comparison"
 ) |>
-  kbl(caption = "Arquivos de dados e abas correspondentes no dashboard") |>
+  kbl(caption = "Data files and corresponding dashboard tabs") |>
   kable_styling(bootstrap_options = c("striped","hover","condensed"),
                 font_size = 12) |>
   column_spec(1, monospace = TRUE, width = "30em")
 ```
 
-# Roadmap — Atualização Automática dos Dados
+## Punctuality File Format
 
-## Visão Geral
-
-Atualmente, os arquivos CSV em `data/` foram gerados manualmente a partir das
-bases de dados de DECEA e EUROCONTROL para a produção do relatório 2019–2025.
-
-O próximo passo é **automatizar** a geração desses arquivos, permitindo que o
-dashboard seja atualizado sem necessidade de intervenção manual a cada novo
-período de dados.
-
-## Arquitetura Planejada
-
-```
-Fontes de dados originais
-(DECEA / EUROCONTROL PRU)
-         │
-         ▼
-  Scripts R de extração
-  e processamento
-  (a serem adicionados)
-         │
-         ▼
-  data/*.csv  ←── Arquivos lidos pelo dashboard
-         │
-         ▼
-  app.R (Shiny Dashboard)
-```
-
-## Scripts Previstos
-
-A tabela abaixo lista os scripts R que serão adicionados ao repositório para
-regenerar cada conjunto de dados:
-
-| Script (futuro) | Dados gerados | Status |
-|-----------------|--------------|--------|
-| `R/build_traffic.R` | Tráfego diário BRA e EUR | 🔲 Planejado |
-| `R/build_punctuality.R` | Distribuições de pontualidade (buckets de minuto) | 🔲 Planejado |
-| `R/build_taxi_asma.R` | Tempos adicionais de taxi e ASMA | 🔲 Planejado |
-| `R/build_capacity.R` | Capacidade declarada, BLI e PLI | 🔲 Planejado |
-| `R/build_flows.R` | Pares de rotas BRA-EUR e distribuição mundial | 🔲 Planejado |
-| `R/build_throughput.R` | Curvas de throughput ordenado por aeroporto | 🔲 Planejado |
-| `R/run_all.R` | Script mestre que executa todos os acima em sequência | 🔲 Planejado |
-
-## Convenção de Nomenclatura dos Arquivos
-
-Os arquivos seguem o padrão:
-
-```
-PBWG-{REG}-{indicador}-{período}-{referência}.csv
-```
-
-Exemplos:
-- `PBWG-BRA-punc-2025.csv`
-- `PBWG-EUR-txxt-analytic-2025-ref2024-icao_ganp_p20.csv`
-- `PBWG-BRA-EUR-bli-pli-2019-2025.csv`
-
-Os scripts de atualização deverão manter essa convenção para que o dashboard
-os reconheça automaticamente.
-
-## Formato dos Dados de Pontualidade
-
-Os arquivos de pontualidade usam o formato de **buckets de minuto** do padrão
-ICAO GANP. Cada linha representa um aeroporto × data × fase, com contagens por
-faixa de minutos de desvio em relação ao horário programado:
+The punctuality files use the **ICAO GANP minute-bucket format**. Each row
+represents one airport × date × phase combination, with flight counts per
+minute-deviation band relative to the scheduled time:
 
 ```
 ICAO, DATE, PHASE, N_VALID,
 (-INF,-60], (-60,-55], ..., (-5,0], (0,5), ..., [55,60), [60,INF)
 ```
 
-O dashboard agrega esses buckets nas cinco bandas padrão do PBWG.
+Negative values indicate early operations; positive values indicate late
+operations. The dashboard aggregates these 28 buckets into the five standard
+PBWG bands at load time.
 
-## Próximos Passos
+# Data Update Roadmap
 
-1. **Definir acesso às fontes** — estabelecer conexões com as bases de dados
-   de DECEA e EUROCONTROL/PRU
-2. **Desenvolver scripts de extração** — um script por indicador, seguindo a
-   estrutura `R/build_*.R`
-3. **Testar integração** — garantir que os arquivos gerados pelos scripts têm
-   exatamente o mesmo schema dos arquivos atuais
-4. **Automatizar execução** — configurar execução periódica (mensal ou após
-   cada publicação de dados) via `R/run_all.R`
-5. **Expandir cobertura** — adicionar ASMA para o Brasil, dados históricos de
-   pontualidade BRA para anos anteriores a 2025, e novos indicadores (HFE, VFE)
+## Overview
+
+The CSV files currently in `data/` were generated manually from DECEA and
+EUROCONTROL databases to produce the 2019–2025 report edition.
+
+The next step is to **automate** the generation of these files so the dashboard
+can be refreshed without manual intervention each time new data becomes available.
+
+## Planned Architecture
+
+```
+Original data sources
+(DECEA / EUROCONTROL PRU)
+         │
+         ▼
+  R extraction and
+  processing scripts
+  (to be added)
+         │
+         ▼
+  data/*.csv  ←── Files read by the dashboard
+         │
+         ▼
+  app.R (Shiny Dashboard)
+```
+
+## Planned Scripts
+
+The table below lists the R scripts that will be added to the repository to
+regenerate each dataset:
+
+| Script (planned) | Data generated | Status |
+|------------------|---------------|--------|
+| `R/build_traffic.R` | Daily flight volume BRA and EUR | 🔲 Planned |
+| `R/build_punctuality.R` | Punctuality distributions (minute buckets) | 🔲 Planned |
+| `R/build_taxi_asma.R` | Additional taxi and ASMA times | 🔲 Planned |
+| `R/build_capacity.R` | Declared capacity, BLI and PLI | 🔲 Planned |
+| `R/build_flows.R` | BRA-EUR route pairs and world region distribution | 🔲 Planned |
+| `R/build_throughput.R` | Ordered throughput curves by airport | 🔲 Planned |
+| `R/run_all.R` | Master script that runs all of the above in sequence | 🔲 Planned |
+
+## File Naming Convention
+
+Data files follow the pattern:
+
+```
+PBWG-{REGION}-{indicator}-{period}-{reference}.csv
+```
+
+Examples:
+
+- `PBWG-BRA-punc-2025.csv`
+- `PBWG-EUR-txxt-analytic-2025-ref2024-icao_ganp_p20.csv`
+- `PBWG-BRA-EUR-bli-pli-2019-2025.csv`
+
+Update scripts must maintain this convention so the dashboard recognises
+the files automatically.
+
+## Next Steps
+
+1. **Define data access** — establish connections to DECEA and EUROCONTROL/PRU
+   databases
+2. **Develop extraction scripts** — one script per indicator, following the
+   `R/build_*.R` structure
+3. **Test integration** — ensure that script-generated files match the exact
+   schema of the current files
+4. **Automate execution** — schedule periodic runs (monthly or after each data
+   publication) via `R/run_all.R`
+5. **Expand coverage** — add ASMA data for Brazil, historical BRA punctuality
+   for years prior to 2025, and new indicators (HFE, VFE)
 
 ---
 
-# Informações Técnicas
+# Technical Notes
 
-## Dependências de Versão
+## Version Requirements
 
 ```r
-R >= 4.1
-shiny >= 1.8
-bslib >= 0.7
-ggplot2 >= 3.5
-dplyr >= 1.1
+R        >= 4.1
+shiny    >= 1.8
+bslib    >= 0.7
+ggplot2  >= 3.5
+dplyr    >= 1.1
 ```
 
-## Desempenho
+## Performance
 
-O carregamento inicial do app processa arquivos que somam ~800 MB de dados CSV.
-Em máquinas com ≥ 8 GB de RAM o tempo de inicialização é de aproximadamente
-**15–30 segundos**. Após carregado, todas as interações são em memória e respondem
-em menos de 1 segundo.
+The app processes data files totalling approximately 800 MB of CSV on initial
+load. On machines with ≥ 8 GB RAM the start-up time is around **15–30 seconds**.
+Once loaded, all interactions are in-memory and respond in under 1 second.
 
-Para reduzir o tempo de carregamento em versões futuras, os dados poderão ser
-pré-processados e salvos no formato `.rds` (nativo do R), que é lido cerca de
-10× mais rápido que CSV.
+To reduce load time in future versions, pre-processed data can be saved in
+`.rds` format (R native), which is read approximately 10× faster than CSV.
 
-## Referência
+## Reference
 
 > DECEA / EUROCONTROL Performance Review Unit.
 > *Comparison of Operational Air Navigation System Performance:
